@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="en" class=""><head><script>window.livecodes = window.livecodes || {};</script><title>Window 10 update version </title><meta name="title" content="Window 10 update version "><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="stylesheet" href="./style.css"><script src="https://cdn.jsdelivr.net/npm/es-module-shims@1.10.0/dist/es-module-shims.js" async=""></script><script type="importmap">{
+  "imports": {}
+}</script></head><body>
+
+
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Navrose Virtual Desktop</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Segoe+UI,Inter,sans-serif&display=swap');
+        body {
+            font-family: 'Segoe UI', 'Inter', sans-serif;
+            background: url('https://images.unsplash.com/photo-1485470733090-0aae1788d5af?q=80&w=2187&auto=format&fit=crop') no-repeat center center fixed;
+            background-size: cover;
+            overflow: hidden;
+            user-select: none;
+        }
+        #desktop {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 40px; /* Space for taskbar */
+            padding: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            grid-auto-rows: 120px;
+            gap: 15px;
+            align-content: start;
+        }
+        .desktop-icon {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            text-align: center;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            background-color: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .desktop-icon:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+        }
+        .desktop-icon.folder.drag-over {
+            background-color: rgba(56, 178, 172, 0.5); /* Teal color */
+            transform: scale(1.1);
+        }
+        .desktop-icon img {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 8px;
+            object-fit: contain;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+        }
+        .desktop-icon .icon-label {
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+            text-shadow: 0px 1px 3px rgba(0, 0, 0, 0.9);
+            word-break: break-word;
+            line-height: 1.2;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .window {
+            position: absolute;
+            background-color: #fdfdfd;
+            border: 1px solid #ccc;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            min-width: 320px;
+            min-height: 240px;
+            overflow: hidden;
+            transition: top 0.3s ease, left 0.3s ease, width 0.3s ease, height 0.3s ease;
+        }
+        .window.maximized {
+            top: 0 !important; left: 0 !important; width: 100% !important; height: calc(100% - 40px) !important; resize: none; border-radius: 0;
+            transition: none;
+        }
+        .window .title-bar {
+            background-color: #2d3748; /* Darker title bar */
+            color: #fff;
+            padding: 6px 8px;
+            cursor: move;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #4a5568;
+        }
+        .window .title-bar .title {
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .window .window-controls button {
+            width: 28px; height: 28px; border: none; background: none; font-size: 16px; font-weight: bold; cursor: pointer; color: #fff; border-radius: 4px; transition: background-color 0.2s;
+        }
+        .window .window-controls .minimize:hover { background-color: #4a5568; }
+        .window .window-controls .refresh:hover { background-color: #4a5568; }
+        .window .window-controls .maximize:hover { background-color: #4a5568; }
+        .window .window-controls .close:hover { background-color: #e53e3e; }
+        .window .window-body { flex-grow: 1; position: relative; overflow: auto; }
+        .window .window-body iframe {
+            width: 100%; height: 100%; border: none;
+        }
+        .window .folder-body {
+            padding: 10px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 10px;
+            align-content: flex-start;
+        }
+        .folder-body .desktop-icon {
+            width: 80px; height: 100px;
+            background-color: transparent;
+            backdrop-filter: none;
+            border: none;
+        }
+        .folder-body .desktop-icon:hover {
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+        .folder-body .desktop-icon img { width: 48px; height: 48px; }
+        .folder-body .desktop-icon .icon-label { color: #1f2937; text-shadow: none; font-size: 12px; }
+
+        .resizer {
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            right: 0;
+            bottom: 0;
+            cursor: nwse-resize;
+            z-index: 5;
+        }
+        .resizer::after {
+            content: '';
+            position: absolute;
+            right: 3px;
+            bottom: 3px;
+            width: 6px;
+            height: 6px;
+            border-right: 2px solid rgba(0,0,0,0.4);
+            border-bottom: 2px solid rgba(0,0,0,0.4);
+            opacity: 0.8;
+        }
+        .window.maximized .resizer {
+            display: none;
+        }
+        #taskbar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 40px;
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 8px;
+        }
+        #taskbar-left {
+            display: flex;
+            align-items: center;
+        }
+        .taskbar-item {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 4px 12px;
+            margin: 0 4px;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+        }
+        .taskbar-item.active {
+            background-color: rgba(255, 255, 255, 0.25);
+            border-bottom: 3px solid #38b2ac; /* Teal color */
+        }
+        #start-menu-button {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            margin-right: 4px;
+            margin-left: -8px;
+        }
+        #start-menu-button:hover { background-color: rgba(255, 255, 255, 0.1); }
+        #start-menu {
+            position: absolute;
+            bottom: 50px;
+            left: 10px;
+            width: 380px;
+            height: 500px;
+            background-color: rgba(30, 30, 30, 0.8);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            border-radius: 8px;
+            z-index: 9998;
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+        }
+        #start-menu.hidden { display: none; }
+        #start-menu-search {
+            width: 100%;
+            padding: 10px 15px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            color: white;
+            font-size: 16px;
+            outline: none;
+            margin-bottom: 12px;
+        }
+        #start-menu-results {
+            flex-grow: 1;
+            overflow-y: auto;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        #start-menu-results li {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            color: white;
+        }
+        #start-menu-results li:hover { background-color: rgba(255, 255, 255, 0.15); }
+        #start-menu-results li img { width: 32px; height: 32px; margin-right: 12px; }
+
+        #tiling-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .tiling-btn {
+            background-color: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            border-radius: 4px;
+            width: 32px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tiling-btn:hover {
+            background-color: rgba(255, 255, 255, 0.25);
+        }
+        #context-menu {
+            position: absolute;
+            display: none;
+            background-color: rgba(30, 30, 30, 0.8);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            border-radius: 8px;
+            padding: 8px;
+            z-index: 10000;
+            min-width: 220px;
+        }
+        #context-menu button {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            padding: 10px 12px;
+            border: none;
+            background: none;
+            text-align: left;
+            font-size: 14px;
+            color: #fff;
+            cursor: pointer;
+            border-radius: 6px;
+        }
+        #context-menu button:hover {
+            background-color: rgba(255, 255, 255, 0.15);
+        }
+        #context-menu button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background-color: transparent;
+        }
+        #context-menu button svg {
+            width: 18px;
+            height: 18px;
+        }
+        hr.context-menu-divider {
+            border: none;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            margin: 4px 0;
+        }
+        /* Music Player Styles */
+        .music-player { padding: 16px; background-color: #1f2937; color: white; height: 100%; display: flex; flex-direction: column; }
+        .music-player .track-info { text-align: center; margin-bottom: 16px; }
+        .music-player .track-title { font-size: 1.1rem; font-weight: bold; }
+        .music-player .track-artist { font-size: 0.9rem; color: #9ca3af; }
+        .music-player .progress-container { margin: 12px 0; }
+        .music-player .progress-bar { width: 100%; cursor: pointer; }
+        .music-player .time-stamps { display: flex; justify-content: space-between; font-size: 0.75rem; color: #9ca3af; }
+        .music-player .controls { display: flex; justify-content: center; align-items: center; gap: 16px; margin-bottom: 16px;}
+        .music-player .controls button { background: none; border: none; color: white; cursor: pointer; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; }
+        .music-player .controls button.active { color: #38b2ac; }
+        .music-player .play-pause-btn { width: 50px; height: 50px; background-color: #38b2ac; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+        .music-player .playlist { flex-grow: 1; overflow-y: auto; border-top: 1px solid #4b5563; padding-top: 10px; }
+        .music-player .playlist-item { padding: 8px 12px; border-radius: 4px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .music-player .playlist-item:hover { background-color: #374151; }
+        .music-player .playlist-item.playing { background-color: #38b2ac; font-weight: bold; }
+        .music-player .add-music-btn { background-color: #4b5563; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; margin-top: 16px; font-weight: 500;}
+        .music-player .add-music-btn:hover { background-color: #6b7280; }
+        
+        /* Video Player Styles */
+        .video-player-container { width: 100%; height: 100%; background-color: #000; display: flex; }
+        .video-player { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; }
+        .video-player video { width: 100%; height: 100%; object-fit: contain; }
+        .video-player .prompt { color: white; text-align: center; }
+        .video-player .open-video-btn { background-color: #38b2ac; color: white; border: none; padding: 12px 20px; font-size: 1rem; border-radius: 6px; cursor: pointer; margin-top: 16px; }
+        .video-player .open-video-btn:hover { background-color: #2c9a93; }
+        
+        .custom-video-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: rgba(0,0,0,0.6);
+            padding: 8px 12px;
+            display: flex;
+            flex-direction: column;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .video-player:hover .custom-video-controls { opacity: 1; }
+        .video-progress-bar { width: 100%; cursor: pointer; }
+        .control-buttons { display: flex; justify-content: center; align-items: center; gap: 16px; margin-top: 8px; }
+        .control-buttons button { background: none; border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .control-buttons .video-play-pause-btn { font-weight: bold; }
+        .video-time { color: white; font-size: 0.8rem; margin-left: 16px; }
+
+        .video-playlist-sidebar {
+            width: 250px;
+            background-color: #1f2937;
+            color: white;
+            flex-shrink: 0;
+            overflow: hidden;
+            border-left: 1px solid #4b5563;
+            transition: width 0.3s ease-in-out;
+        }
+        .video-playlist-sidebar.hidden {
+            width: 0;
+            border-left: none;
+        }
+        .video-playlist-sidebar .sidebar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 12px;
+            border-bottom: 1px solid #4b5563;
+            min-width: 225px; /* Prevent wrapping */
+        }
+        .video-playlist-sidebar .sidebar-header h3 { border-bottom: none; padding: 12px 0; font-bold; }
+        .video-playlist-sidebar .sidebar-header button {
+            background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 0.8rem;
+            padding: 4px 8px; border-radius: 4px;
+        }
+        .video-playlist-sidebar .sidebar-header button:hover { background-color: #374151; color: white; }
+
+        .video-playlist-items { overflow-y: auto; height: 100%;}
+        .video-playlist-items .playlist-item { padding: 10px 12px; cursor: pointer; font-size: 0.9rem; border-bottom: 1px solid #374151; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .video-playlist-items .playlist-item:hover { background-color: #374151; }
+        .video-playlist-items .playlist-item.playing { background-color: #38b2ac; font-weight: bold; }
+    </style>
+<link rel="stylesheet" href="/index.css">
+
+
+
+    <div id="desktop"></div>
+    
+    <div id="start-menu" class="hidden">
+        <input type="search" id="start-menu-search" placeholder="Type to search...">
+        <ul id="start-menu-results"></ul>
+    </div>
+
+    <div id="taskbar">
+        <div id="taskbar-left">
+            <div id="start-menu-button" title="Start">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" width="24px" height="24px"><path d="M 3 3 L 10 3 L 10 10 L 3 10 Z M 14 3 L 21 3 L 21 10 L 14 10 Z M 3 14 L 10 14 L 10 21 L 3 21 Z M 14 14 L 21 14 L 21 21 L 14 21 Z"></path></svg>
+            </div>
+            <div id="taskbar-items">
+                <!-- Taskbar items will be added here -->
+            </div>
+        </div>
+        <div id="tiling-controls">
+            <button class="tiling-btn" id="tile-focus" title="Focus Mode (1 window)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="1" ry="1"></rect></svg>
+            </button>
+             <button class="tiling-btn" id="tile-vertical" title="Vertical Split (2 windows)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="8" rx="1"></rect><rect x="3" y="13" width="18" height="8" rx="1"></rect></svg>
+            </button>
+            <button class="tiling-btn" id="tile-horizontal" title="Horizontal Split (2 windows)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="18" rx="1"></rect><rect x="13" y="3" width="8" height="18" rx="1"></rect></svg>
+            </button>
+            <button class="tiling-btn" id="tile-three-panel" title="Three-Panel Layout (3 windows)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1"></rect><rect x="13" y="3" width="8" height="8" rx="1"></rect><rect x="3" y="13" width="18" height="8" rx="1"></rect></svg>
+            </button>
+            <button class="tiling-btn" id="tile-quadrant" title="Quadrant Layout (4 windows)">
+                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1"></rect><rect x="13" y="3" width="8" height="8" rx="1"></rect><rect x="13" y="13" width="8" height="8" rx="1"></rect><rect x="3" y="13" width="8" height="8" rx="1"></rect></svg>
+            </button>
+        </div>
+    </div>
+    
+    <div id="context-menu">
+        <!-- Context menu items will be dynamically set by JS -->
+    </div>
+
+    <!-- Templates -->
+    <template id="icon-template">
+        <div class="desktop-icon" draggable="true">
+            <img src="" alt="icon">
+            <span class="icon-label"></span>
+        </div>
+    </template>
+
+    <template id="window-template">
+        <div class="window">
+            <div class="title-bar">
+                <span class="title">Window</span>
+                <div class="window-controls">
+                    <button class="minimize" title="Minimize">_</button>
+                    <button class="refresh" title="Refresh">↻</button>
+                    <button class="maximize" title="Maximize">□</button>
+                    <button class="close" title="Close">×</button>
+                </div>
+            </div>
+            <div class="window-body">
+                <!-- Content goes here -->
+            </div>
+            <div class="resizer"></div>
+        </div>
+    </template>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyC0_DQIiyaVQllFH4pxH1Dm3r2kFXXoOgc",
+            authDomain: "navrosetailorapp.firebaseapp.com",
+            databaseURL: "https://navrosetailorapp-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "navrosetailorapp",
+            storageBucket: "navrosetailorapp.firebasestorage.app",
+        };
+        
+        let db;
+        const desktop = document.getElementById('desktop');
+        const taskbarItems = document.getElementById('taskbar-items');
+        const contextMenu = document.getElementById('context-menu');
+        const startMenu = document.getElementById('start-menu');
+        const startMenuSearch = document.getElementById('start-menu-search');
+        const startMenuResults = document.getElementById('start-menu-results');
+        
+        let openWindows = new Map();
+        let zIndexCounter = 10;
+        let activeWindowId = null;
+        let contextTarget = null; // Can be an app, a folder, or the desktop itself
+        let allDesktopItems = []; // Combined apps and folders
+        const builtInApps = [
+            { id: 'app-music', name: 'Music Player', type: 'builtin', icon: 'https://img.icons8.com/fluency/96/music.png' },
+            { id: 'app-video', name: 'Video Player', type: 'builtin', icon: 'https://img.icons8.com/fluency/96/play-button-circled.png' }
+        ];
+
+        // --- Centralized Drag & Resize State ---
+        let actionState = {
+            active: false,
+            type: null, // 'drag', 'resize', 'icon-drag'
+            target: null,
+            startX: 0,
+            startY: 0,
+            initialLeft: 0,
+            initialTop: 0,
+            initialWidth: 0,
+            initialHeight: 0,
+            draggedItemId: null
+        };
+
+        // --- Reusable Utility Functions ---
+        function formatTime(seconds) {
+            if (isNaN(seconds)) return "0:00";
+            const minutes = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
+        }
+
+        // --- Global Event Handlers for Drag/Resize ---
+        function handleActionMove(e) {
+            if (!actionState.active) return;
+            e.preventDefault();
+
+            if (actionState.type === 'drag') {
+                const dx = e.clientX - actionState.startX;
+                const dy = e.clientY - actionState.startY;
+                actionState.target.style.left = `${actionState.initialLeft + dx}px`;
+                actionState.target.style.top = `${actionState.initialTop + dy}px`;
+            } else if (actionState.type === 'resize') {
+                const dw = e.clientX - actionState.startX;
+                const dh = e.clientY - actionState.startY;
+                const newWidth = actionState.initialWidth + dw;
+                const newHeight = actionState.initialHeight + dh;
+                const minWidth = parseInt(getComputedStyle(actionState.target).minWidth, 10);
+                const minHeight = parseInt(getComputedStyle(actionState.target).minHeight, 10);
+                
+                if (newWidth >= minWidth) actionState.target.style.width = `${newWidth}px`;
+                if (newHeight >= minHeight) actionState.target.style.height = `${newHeight}px`;
+            }
+        }
+
+        function handleActionEnd(e) {
+            if (!actionState.active) return;
+            const overlay = document.getElementById('global-action-overlay');
+            if (overlay) {
+                overlay.remove();
+            }
+            actionState.active = false;
+            actionState.target = null;
+            actionState.draggedItemId = null;
+        }
+
+        window.addEventListener('mousemove', handleActionMove);
+        window.addEventListener('mouseup', handleActionEnd);
+        window.addEventListener('mouseleave', handleActionEnd); 
+
+        // --- App & Window Management ---
+        function getFaviconUrl(url) {
+            try {
+                const domain = new URL(url).hostname;
+                return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+            } catch (e) {
+                return 'https://img.icons8.com/color/96/000000/file.png'; // Default icon
+            }
+        }
+        
+        function launchApp(appData, action = 'popup') {
+            if (!appData) return;
+            if (appData.type === 'folder') {
+                createWindow(appData);
+                return;
+            }
+            if (appData.type === 'builtin' && action !== 'popup') {
+                alert("Built-in apps can only be opened as popups.");
+                return;
+            }
+            switch (action) {
+                case 'popup':
+                    createWindow(appData);
+                    break;
+                case 'newWindow':
+                    window.open(appData.url, '_blank');
+                    break;
+                case 'sameWindow':
+                    window.location.href = appData.url;
+                    break;
+            }
+            hideContextMenu();
+            startMenu.classList.add('hidden');
+        }
+
+        function createWindow(appData) {
+            if (openWindows.has(appData.id)) {
+                focusWindow(appData.id);
+                return;
+            }
+
+            const template = document.getElementById('window-template');
+            const clone = template.content.cloneNode(true);
+            const win = clone.querySelector('.window');
+            win.id = `window-${appData.id}`;
+            win.querySelector('.title').textContent = appData.name;
+            const windowBody = win.querySelector('.window-body');
+
+            // Handle content type
+            if (appData.type === 'builtin') {
+                if (appData.id === 'app-music') {
+                    windowBody.innerHTML = createMusicPlayerContent();
+                    setupMusicPlayer(win);
+                } else if (appData.id === 'app-video') {
+                    windowBody.innerHTML = createVideoPlayerContent();
+                    setupVideoPlayer(win);
+                }
+            } else if (appData.type === 'folder') {
+                windowBody.classList.add('folder-body');
+                const itemsInFolder = allDesktopItems.filter(item => item.folderId === appData.id);
+                itemsInFolder.forEach(itemData => {
+                    const iconEl = createIconElement(itemData, true);
+                    windowBody.appendChild(iconEl);
+                });
+
+            } else { // It's a link
+                const iframe = document.createElement('iframe');
+                iframe.src = appData.url;
+                iframe.frameborder = "0";
+                windowBody.appendChild(iframe);
+            }
+
+            const initialWidth = 800;
+            const initialHeight = 600;
+            win.style.width = `${initialWidth}px`;
+            win.style.height = `${initialHeight}px`;
+
+            const viewportHeight = window.innerHeight - 40;
+            const viewportWidth = window.innerWidth;
+            const top = 50 + (openWindows.size * 25) % Math.max(1, viewportHeight - initialHeight);
+            const left = 100 + (openWindows.size * 25) % Math.max(1, viewportWidth - initialWidth);
+            win.style.top = `${top}px`;
+            win.style.left = `${left}px`;
+            
+            document.body.appendChild(win);
+            
+            const windowData = { element: win, minimized: false, savedState: {} };
+            openWindows.set(appData.id, windowData);
+            
+            setupWindowInteractions(appData.id, win);
+            addToTaskbar(appData.id, appData.name);
+            focusWindow(appData.id);
+        }
+
+        function focusWindow(id) {
+            if (activeWindowId && activeWindowId !== id) {
+                const oldActive = openWindows.get(activeWindowId);
+                if(oldActive) {
+                    oldActive.element.style.zIndex = zIndexCounter - 1;
+                    document.getElementById(`taskbar-${activeWindowId}`)?.classList.remove('active');
+                }
+            }
+            const windowData = openWindows.get(id);
+            if(windowData) {
+                windowData.element.style.zIndex = zIndexCounter++;
+                document.getElementById(`taskbar-${id}`)?.classList.add('active');
+                activeWindowId = id;
+
+                const wasMinimized = windowData.minimized;
+                if(wasMinimized) {
+                    windowData.element.style.display = 'flex';
+                    windowData.minimized = false;
+                }
+            }
+        }
+
+        function closeWindow(id) {
+            const windowData = openWindows.get(id);
+            if (windowData) {
+                windowData.element.remove();
+                openWindows.delete(id);
+                document.getElementById(`taskbar-${id}`).remove();
+            }
+        }
+        
+        function minimizeWindow(id) {
+            const windowData = openWindows.get(id);
+            if(windowData) {
+                windowData.element.style.display = 'none';
+                windowData.minimized = true;
+                document.getElementById(`taskbar-${id}`)?.classList.remove('active');
+                if (activeWindowId === id) {
+                    activeWindowId = null;
+                }
+            }
+        }
+        
+        function toggleMaximizeWindow(id) {
+            const windowData = openWindows.get(id);
+            if(windowData) {
+                const win = windowData.element;
+                if(win.classList.contains('maximized')) {
+                    win.classList.remove('maximized');
+                    Object.assign(win.style, windowData.savedState);
+                } else {
+                    windowData.savedState = {
+                        top: win.style.top,
+                        left: win.style.left,
+                        width: win.style.width,
+                        height: win.style.height
+                    };
+                    win.classList.add('maximized');
+                }
+            }
+        }
+        
+        // --- UI & Interactions ---
+        function createIconElement(itemData, isInsideFolder = false) {
+            const template = document.getElementById('icon-template');
+            const clone = template.content.cloneNode(true);
+            const iconDiv = clone.querySelector('.desktop-icon');
+            const iconImg = iconDiv.querySelector('img');
+            iconDiv.dataset.id = itemData.id;
+
+            if (itemData.type === 'folder') {
+                iconImg.src = 'https://img.icons8.com/fluency/96/folder-invoices.png';
+                iconDiv.classList.add('folder');
+                iconDiv.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    iconDiv.classList.add('drag-over');
+                });
+                iconDiv.addEventListener('dragleave', () => iconDiv.classList.remove('drag-over'));
+                iconDiv.addEventListener('drop', (e) => handleDropOnFolder(e, itemData.id));
+            } else {
+                iconImg.src = itemData.type === 'builtin' ? itemData.icon : getFaviconUrl(itemData.url);
+                iconImg.onerror = function() { this.src = 'https://img.icons8.com/color/96/000000/file.png'; };
+            }
+
+            iconDiv.querySelector('.icon-label').textContent = itemData.name;
+            
+            iconDiv.addEventListener('click', (e) => launchApp(itemData));
+
+            if (!isInsideFolder) {
+                iconDiv.addEventListener('contextmenu', (e) => showContextMenu(e, itemData));
+                iconDiv.addEventListener('dragstart', (e) => handleIconDragStart(e, itemData.id));
+            }
+            
+            return iconDiv;
+        }
+
+        function renderAllIcons() {
+            desktop.innerHTML = '';
+            const desktopItems = allDesktopItems.filter(item => !item.folderId);
+            desktopItems.forEach(itemData => {
+                const iconEl = createIconElement(itemData);
+                desktop.appendChild(iconEl);
+            });
+        }
+        
+        function showContextMenu(event, targetData) {
+            event.preventDefault();
+            event.stopPropagation();
+            contextTarget = targetData;
+
+            let menuHTML = '';
+            if (targetData && targetData.id) { // Context is an icon or folder
+                menuHTML += `
+                    <button data-action="popup">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" /></svg>
+                        Open
+                    </button>`;
+                if(targetData.type === 'link') {
+                    menuHTML += `
+                        <button data-action="newWindow">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-4.5 4.5V6H18" /></svg>
+                            Open in New Tab
+                        </button>
+                    `;
+                }
+            } else { // Context is the desktop
+                 menuHTML += `
+                    <button data-action="newFolder">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10.5v6m3-3H9m4.06-7.19-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z" /></svg>
+                        New Folder
+                    </button>
+                 `;
+            }
+            contextMenu.innerHTML = menuHTML;
+            contextMenu.style.display = 'block';
+            const menuWidth = contextMenu.offsetWidth;
+            const menuHeight = contextMenu.offsetHeight;
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            let left = event.clientX, top = event.clientY;
+            if (left + menuWidth > viewportWidth) left = viewportWidth - menuWidth - 10;
+            if (top + menuHeight > viewportHeight) top = viewportHeight - menuHeight - 10;
+            contextMenu.style.left = `${left}px`;
+            contextMenu.style.top = `${top}px`;
+        }
+        
+        function hideContextMenu() {
+             contextMenu.style.display = 'none';
+             contextTarget = null;
+        }
+        
+        function setupWindowInteractions(id, win) {
+            const titleBar = win.querySelector('.title-bar');
+            const resizer = win.querySelector('.resizer');
+            
+            win.addEventListener('mousedown', () => focusWindow(id), true);
+            
+            win.querySelector('.close').addEventListener('click', () => closeWindow(id));
+            win.querySelector('.minimize').addEventListener('click', () => minimizeWindow(id));
+            win.querySelector('.maximize').addEventListener('click', () => toggleMaximizeWindow(id));
+            win.querySelector('.refresh').addEventListener('click', () => {
+                const iframe = win.querySelector('iframe');
+                if (iframe) {
+                    iframe.contentWindow.location.reload(true);
+                }
+            });
+            titleBar.addEventListener('dblclick', () => toggleMaximizeWindow(id));
+            
+            const startAction = (e, type) => {
+                if ((type === 'drag' && e.target.tagName === 'BUTTON') || win.classList.contains('maximized')) return;
+                e.preventDefault();
+                focusWindow(id);
+                
+                actionState.active = true;
+                actionState.type = type;
+                actionState.target = win;
+                actionState.startX = e.clientX;
+                actionState.startY = e.clientY;
+
+                const style = window.getComputedStyle(win);
+                if (type === 'drag') {
+                    actionState.initialLeft = parseInt(style.left, 10) || 0;
+                    actionState.initialTop = parseInt(style.top, 10) || 0;
+                } else {
+                    actionState.initialWidth = parseInt(style.width, 10);
+                    actionState.initialHeight = parseInt(style.height, 10);
+                }
+                
+                const overlay = document.createElement('div');
+                overlay.id = 'global-action-overlay';
+                overlay.style.cssText = `position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10000; cursor: ${type === 'drag' ? 'move' : 'nwse-resize'};`;
+                document.body.appendChild(overlay);
+            };
+            
+            titleBar.addEventListener('mousedown', (e) => startAction(e, 'drag'));
+            resizer.addEventListener('mousedown', (e) => startAction(e, 'resize'));
+        }
+
+        function addToTaskbar(id, title) {
+            const item = document.createElement('div');
+            item.className = 'taskbar-item';
+            item.id = `taskbar-${id}`;
+            item.textContent = title.substring(0, 15) + (title.length > 15 ? '…' : '');
+            item.title = title;
+            item.addEventListener('click', () => focusWindow(id));
+            taskbarItems.appendChild(item);
+        }
+        
+        function applyLayout(layoutType) {
+            const windowsToTile = Array.from(openWindows.values()).filter(w => !w.minimized && !w.element.classList.contains('maximized')).map(w => w.element);
+            if (windowsToTile.length === 0) return;
+
+            const taskbarHeight = 40;
+            const w = window.innerWidth;
+            const h = window.innerHeight - taskbarHeight;
+            const p = 5; // padding
+
+            windowsToTile.forEach(win => {
+                win.style.transition = 'all 0.3s ease-in-out';
+                setTimeout(() => win.style.transition = 'none', 300);
+            });
+
+            if (layoutType === 'focus' && windowsToTile.length >= 1) {
+                const win = windowsToTile[0];
+                win.style.top = `${p}px`;
+                win.style.left = `${p}px`;
+                win.style.width = `${w - 2 * p}px`;
+                win.style.height = `${h - 2 * p}px`;
+            } else if (layoutType === 'vertical-split' && windowsToTile.length >= 2) {
+                const win1 = windowsToTile[0], win2 = windowsToTile[1];
+                win1.style.top = `${p}px`; win1.style.left = `${p}px`; win1.style.width = `${w - 2 * p}px`; win1.style.height = `${h / 2 - 1.5 * p}px`;
+                win2.style.top = `${h / 2 + p / 2}px`; win2.style.left = `${p}px`; win2.style.width = `${w - 2 * p}px`; win2.style.height = `${h / 2 - 1.5 * p}px`;
+            } else if (layoutType === 'horizontal-split' && windowsToTile.length >= 2) {
+                const win1 = windowsToTile[0], win2 = windowsToTile[1];
+                win1.style.top = `${p}px`; win1.style.left = `${p}px`; win1.style.width = `${w / 2 - 1.5 * p}px`; win1.style.height = `${h - 2 * p}px`;
+                win2.style.top = `${p}px`; win2.style.left = `${w / 2 + p / 2}px`; win2.style.width = `${w / 2 - 1.5 * p}px`; win2.style.height = `${h - 2 * p}px`;
+            } else if (layoutType === 'three-panel' && windowsToTile.length >= 3) {
+                 const [win1, win2, win3] = windowsToTile;
+                 win1.style.top = `${p}px`; win1.style.left = `${p}px`; win1.style.width = `${w/2 - 1.5*p}px`; win1.style.height = `${h/2 - 1.5*p}px`;
+                 win2.style.top = `${p}px`; win2.style.left = `${w/2 + p/2}px`; win2.style.width = `${w/2 - 1.5*p}px`; win2.style.height = `${h/2 - 1.5*p}px`;
+                 win3.style.top = `${h/2 + p/2}px`; win3.style.left = `${p}px`; win3.style.width = `${w - 2*p}px`; win3.style.height = `${h/2 - 1.5*p}px`;
+            } else if (layoutType === 'quadrant' && windowsToTile.length >= 4) {
+                const [win1, win2, win3, win4] = windowsToTile;
+                win1.style.top = `${p}px`; win1.style.left = `${p}px`; win1.style.width = `${w/2 - 1.5*p}px`; win1.style.height = `${h/2 - 1.5*p}px`;
+                win2.style.top = `${p}px`; win2.style.left = `${w/2 + p/2}px`; win2.style.width = `${w/2 - 1.5*p}px`; win2.style.height = `${h/2 - 1.5*p}px`;
+                win3.style.top = `${h/2 + p/2}px`; win3.style.left = `${p}px`; win3.style.width = `${w/2 - 1.5*p}px`; win3.style.height = `${h/2 - 1.5*p}px`;
+                win4.style.top = `${h/2 + p/2}px`; win4.style.left = `${w/2 + p/2}px`; win4.style.width = `${w/2 - 1.5*p}px`; win4.style.height = `${h/2 - 1.5*p}px`;
+            }
+        }
+        
+        // --- Built-in App Content & Logic ---
+        function createMusicPlayerContent() {
+            return `
+                <div class="music-player">
+                    <div class="track-info">
+                        <div class="track-title">No Music Loaded</div>
+                        <div class="track-artist">Add music to begin</div>
+                    </div>
+                    <div class="progress-container">
+                        <input type="range" class="progress-bar" value="0" step="0.1" max="100">
+                        <div class="time-stamps">
+                            <span class="current-time">0:00</span>
+                            <span class="total-time">0:00</span>
+                        </div>
+                    </div>
+                    <div class="controls">
+                        <button id="shuffle-btn" title="Shuffle"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"></path></svg></button>
+                        <button id="prev-btn" title="Previous"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"></path></svg></button>
+                        <button id="play-pause-btn" class="play-pause-btn">
+                            <svg id="play-icon" width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>
+                            <svg id="pause-icon" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path></svg>
+                        </button>
+                        <button id="next-btn" title="Next"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zm-4.5 6-8.5 6V6z"></path></svg></button>
+                        <button id="repeat-btn" title="Repeat"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"></path></svg></button>
+                    </div>
+                    <div class="playlist"></div>
+                    <button class="add-music-btn">Add Music File(s)</button>
+                    <input type="file" id="music-file-input" multiple accept="audio/*" style="display:none;">
+                    <audio id="audio-player" style="display:none;"></audio>
+                </div>
+            `;
+        }
+
+        function setupMusicPlayer(win) {
+            let playlist = [], originalPlaylist = [];
+            let currentTrackIndex = 0;
+            let repeatMode = 'none'; // 'none', 'one', 'all'
+            let isShuffled = false;
+            
+            const audio = win.querySelector('#audio-player');
+            const playPauseBtn = win.querySelector('#play-pause-btn');
+            const playIcon = win.querySelector('#play-icon');
+            const pauseIcon = win.querySelector('#pause-icon');
+            const prevBtn = win.querySelector('#prev-btn');
+            const nextBtn = win.querySelector('#next-btn');
+            const repeatBtn = win.querySelector('#repeat-btn');
+            const shuffleBtn = win.querySelector('#shuffle-btn');
+            const titleEl = win.querySelector('.track-title');
+            const artistEl = win.querySelector('.track-artist');
+            const playlistEl = win.querySelector('.playlist');
+            const addMusicBtn = win.querySelector('.add-music-btn');
+            const musicFileInput = win.querySelector('#music-file-input');
+            const progressBar = win.querySelector('.progress-bar');
+            const currentTimeEl = win.querySelector('.current-time');
+            const totalTimeEl = win.querySelector('.total-time');
+
+            addMusicBtn.addEventListener('click', () => musicFileInput.click());
+
+            musicFileInput.addEventListener('change', (e) => {
+                const files = e.target.files;
+                if(files.length === 0) return;
+                
+                const newTracks = Array.from(files).map(file => ({
+                    title: file.name.replace(/\.[^/.]+$/, ""), artist: "Local File", src: URL.createObjectURL(file), file: file
+                }));
+                
+                const wasEmpty = originalPlaylist.length === 0;
+                originalPlaylist.push(...newTracks);
+                
+                if (isShuffled) {
+                    shufflePlaylist();
+                } else {
+                    playlist = [...originalPlaylist];
+                }
+                updatePlaylistUI();
+                if (wasEmpty && playlist.length > 0) loadTrack(0);
+            });
+
+            function loadTrack(index) {
+                if (index < 0 || index >= playlist.length) return;
+                currentTrackIndex = index;
+                const track = playlist[index];
+                audio.src = track.src;
+                titleEl.textContent = track.title;
+                artistEl.textContent = track.artist;
+                audio.load();
+                updatePlaylistUI();
+            }
+
+            function playTrack() { audio.play(); playIcon.style.display = 'none'; pauseIcon.style.display = 'block'; }
+            function pauseTrack() { audio.pause(); playIcon.style.display = 'block'; pauseIcon.style.display = 'none'; }
+            function playPause() { if(playlist.length > 0) audio.paused ? playTrack() : pauseTrack(); }
+            
+            function nextTrack() {
+                if (playlist.length === 0) return;
+                let newIndex = (currentTrackIndex + 1) % playlist.length;
+                if (repeatMode === 'none' && currentTrackIndex === playlist.length - 1) {
+                    pauseTrack();
+                    loadTrack(0);
+                    return;
+                }
+                loadTrack(newIndex);
+                playTrack();
+            }
+            
+            function prevTrack() { if (playlist.length > 0) { loadTrack((currentTrackIndex - 1 + playlist.length) % playlist.length); playTrack(); } }
+            
+            audio.addEventListener('ended', () => {
+                if (repeatMode === 'one') {
+                    audio.currentTime = 0;
+                    playTrack();
+                } else {
+                    nextTrack();
+                }
+            });
+            
+            function updatePlaylistUI() {
+                if(playlist.length === 0) {
+                    playlistEl.innerHTML = '<p class="text-center text-gray-400 p-4">Your playlist is empty.</p>';
+                    return;
+                }
+                playlistEl.innerHTML = playlist.map((track, index) =>
+                    `<div class="playlist-item ${index === currentTrackIndex ? 'playing' : ''}" data-index="${index}" title="${track.title}">${track.title}</div>`
+                ).join('');
+                playlistEl.querySelectorAll('.playlist-item').forEach(item => {
+                    item.addEventListener('click', () => { loadTrack(parseInt(item.dataset.index)); playTrack(); });
+                });
+            }
+
+            repeatBtn.addEventListener('click', () => {
+                if (repeatMode === 'none') {
+                    repeatMode = 'all';
+                    repeatBtn.classList.add('active');
+                    repeatBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"></path></svg>`;
+                } else if (repeatMode === 'all') {
+                    repeatMode = 'one';
+                    repeatBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zm-4-2V9h-1l-2 1v1h1.5v2.5H13z"></path></svg>`;
+                } else {
+                    repeatMode = 'none';
+                    repeatBtn.classList.remove('active');
+                    repeatBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"></path></svg>`;
+                }
+            });
+            
+            shuffleBtn.addEventListener('click', () => {
+                isShuffled = !isShuffled;
+                shuffleBtn.classList.toggle('active', isShuffled);
+                if (isShuffled) {
+                    shufflePlaylist();
+                } else {
+                    playlist = [...originalPlaylist];
+                    const currentSongSrc = audio.src;
+                    currentTrackIndex = playlist.findIndex(t => t.src === currentSongSrc);
+                }
+                updatePlaylistUI();
+            });
+            
+            function shufflePlaylist() {
+                let currentIndex = originalPlaylist.length, randomIndex;
+                const shuffled = [...originalPlaylist];
+                while (currentIndex != 0) {
+                    randomIndex = Math.floor(Math.random() * currentIndex);
+                    currentIndex--;
+                    [shuffled[currentIndex], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[currentIndex]];
+                }
+                playlist = shuffled;
+                if(audio.src) {
+                    currentTrackIndex = playlist.findIndex(t => t.src === audio.src);
+                }
+            }
+            
+            audio.addEventListener('timeupdate', () => {
+                if (audio.duration) {
+                    const progressPercent = (audio.currentTime / audio.duration) * 100;
+                    progressBar.value = progressPercent;
+                    currentTimeEl.textContent = formatTime(audio.currentTime);
+                }
+            });
+            audio.addEventListener('loadedmetadata', () => {
+                totalTimeEl.textContent = formatTime(audio.duration);
+            });
+            progressBar.addEventListener('input', () => {
+                if (audio.duration) {
+                    const seekTime = (progressBar.value / 100) * audio.duration;
+                    audio.currentTime = seekTime;
+                }
+            });
+
+            playPauseBtn.addEventListener('click', playPause);
+            nextBtn.addEventListener('click', nextTrack);
+            prevBtn.addEventListener('click', prevTrack);
+            updatePlaylistUI();
+        }
+        
+        function createVideoPlayerContent() {
+            return `
+                <div class="video-player-container">
+                    <div class="video-player">
+                        <div class="prompt">
+                            <h2>No Video Loaded</h2>
+                            <button class="open-video-btn">Open Video File(s)</button>
+                            <input type="file" id="video-file-input" accept="video/*" multiple style="display:none;">
+                        </div>
+                        <video style="display:none;"></video>
+                        <div class="custom-video-controls" style="display:none;">
+                            <input type="range" class="video-progress-bar" value="0" step="0.1" max="100">
+                            <div class="control-buttons">
+                                <button class="video-prev-btn" title="Previous"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5-6V18z"></path></svg></button>
+                                <button class="video-play-pause-btn" title="Play/Pause">
+                                    <svg class="play-icon" width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>
+                                    <svg class="pause-icon" width="28" height="28" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path></svg>
+                                </button>
+                                <button class="video-next-btn" title="Next"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M16 18h2V6h-2zM6 18l8.5-6L6 6z"></path></svg></button>
+                                <span class="video-time">0:00 / 0:00</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="video-playlist-sidebar">
+                        <div class="sidebar-header">
+                            <h3>Playlist</h3>
+                            <button class="toggle-playlist-btn">Hide</button>
+                        </div>
+                        <div class="video-playlist-items"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function setupVideoPlayer(win) {
+            let playlist = [];
+            let currentVideoIndex = -1;
+
+            const videoEl = win.querySelector('video');
+            const promptEl = win.querySelector('.prompt');
+            const openBtn = win.querySelector('.open-video-btn');
+            const fileInput = win.querySelector('#video-file-input');
+            const playlistItemsEl = win.querySelector('.video-playlist-items');
+            
+            const sidebar = win.querySelector('.video-playlist-sidebar');
+            const togglePlaylistBtn = win.querySelector('.toggle-playlist-btn');
+            const customControls = win.querySelector('.custom-video-controls');
+            const playPauseBtn = win.querySelector('.video-play-pause-btn');
+            const playIcon = playPauseBtn.querySelector('.play-icon');
+            const pauseIcon = playPauseBtn.querySelector('.pause-icon');
+            const nextBtn = win.querySelector('.video-next-btn');
+            const prevBtn = win.querySelector('.video-prev-btn');
+            const progressBar = win.querySelector('.video-progress-bar');
+            const timeDisplay = win.querySelector('.video-time');
+
+            openBtn.addEventListener('click', () => fileInput.click());
+
+            fileInput.addEventListener('change', (e) => {
+                const files = e.target.files;
+                if(files.length > 0) {
+                    const newVideos = Array.from(files).map(file => ({
+                        name: file.name,
+                        src: URL.createObjectURL(file)
+                    }));
+                    const wasEmpty = playlist.length === 0;
+                    playlist.push(...newVideos);
+                    renderVideoPlaylist();
+                    if (wasEmpty) {
+                        loadAndPlayVideo(0);
+                    }
+                }
+            });
+
+            function renderVideoPlaylist() {
+                playlistItemsEl.innerHTML = playlist.map((video, index) =>
+                    `<div class="playlist-item ${index === currentVideoIndex ? 'playing' : ''}" data-index="${index}" title="${video.name}">${video.name}</div>`
+                ).join('');
+                
+                playlistItemsEl.querySelectorAll('.playlist-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const index = parseInt(item.dataset.index, 10);
+                        loadAndPlayVideo(index);
+                    });
+                });
+            }
+
+            function loadAndPlayVideo(index) {
+                if (index < 0 || index >= playlist.length) return;
+                currentVideoIndex = index;
+                videoEl.src = playlist[index].src;
+                videoEl.style.display = 'block';
+                promptEl.style.display = 'none';
+                customControls.style.display = 'flex';
+                videoEl.play();
+                renderVideoPlaylist();
+            }
+
+            function playVideo() { videoEl.play(); }
+            function pauseVideo() { videoEl.pause(); }
+
+            function nextVideo() {
+                if(playlist.length === 0) return;
+                const nextIndex = (currentVideoIndex + 1) % playlist.length;
+                loadAndPlayVideo(nextIndex);
+            }
+            function prevVideo() {
+                if(playlist.length === 0) return;
+                const prevIndex = (currentVideoIndex - 1 + playlist.length) % playlist.length;
+                loadAndPlayVideo(prevIndex);
+            }
+
+            function updateControls() {
+                if (videoEl.paused) {
+                    playIcon.style.display = 'block';
+                    pauseIcon.style.display = 'none';
+                } else {
+                    playIcon.style.display = 'none';
+                    pauseIcon.style.display = 'block';
+                }
+            }
+
+            function updateProgressBar() {
+                if (videoEl.duration) {
+                    progressBar.value = (videoEl.currentTime / videoEl.duration) * 100;
+                    timeDisplay.textContent = `${formatTime(videoEl.currentTime)} / ${formatTime(videoEl.duration)}`;
+                }
+            }
+            
+            // Event listeners
+            videoEl.addEventListener('ended', nextVideo);
+            videoEl.addEventListener('play', updateControls);
+            videoEl.addEventListener('pause', updateControls);
+            videoEl.addEventListener('timeupdate', updateProgressBar);
+            videoEl.addEventListener('loadedmetadata', updateProgressBar);
+            
+            playPauseBtn.addEventListener('click', () => videoEl.paused ? playVideo() : pauseVideo());
+            nextBtn.addEventListener('click', nextVideo);
+            prevBtn.addEventListener('click', prevVideo);
+
+            progressBar.addEventListener('input', () => {
+                if (videoEl.duration) {
+                    videoEl.currentTime = (progressBar.value / 100) * videoEl.duration;
+                }
+            });
+
+            togglePlaylistBtn.addEventListener('click', () => {
+                sidebar.classList.toggle('hidden');
+                togglePlaylistBtn.textContent = sidebar.classList.contains('hidden') ? 'Show' : 'Hide';
+            });
+        }
+        
+        // --- Start Menu ---
+        function updateStartMenuResults(query = "") {
+            const filteredApps = allDesktopItems.filter(app => app.name.toLowerCase().includes(query.toLowerCase()));
+            startMenuResults.innerHTML = filteredApps.map(app => `
+                <li data-appid="${app.id}">
+                    <img src="${
+                        app.type === 'folder' ? 'https://img.icons8.com/fluency/96/folder-invoices.png' :
+                        app.type === 'builtin' ? app.icon : getFaviconUrl(app.url)
+                    }" alt="${app.name}">
+                    <span>${app.name}</span>
+                </li>
+            `).join('');
+        }
+
+        // --- Folder Logic ---
+        function handleIconDragStart(e, itemId) {
+            actionState.draggedItemId = itemId;
+            e.dataTransfer.setData('text/plain', itemId);
+            e.dataTransfer.effectAllowed = 'move';
+        }
+        
+        function handleDropOnFolder(e, folderId) {
+            e.preventDefault();
+            const itemId = actionState.draggedItemId || e.dataTransfer.getData('text/plain');
+            e.currentTarget.classList.remove('drag-over');
+
+            if (itemId && itemId !== folderId) {
+                const itemRef = db.ref(`desktop_links/${itemId}`);
+                itemRef.update({ folderId: folderId })
+                    .then(() => showToast('Moved to folder.'))
+                    .catch(err => console.error(err));
+            }
+        }
+        
+        function createNewFolder() {
+            const folderName = prompt("Enter folder name:", "New Folder");
+            if (folderName) {
+                const newFolderRef = db.ref('desktop_folders').push();
+                const newFolder = {
+                    id: newFolderRef.key,
+                    name: folderName,
+                    type: 'folder'
+                };
+                newFolderRef.set(newFolder);
+            }
+        }
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+                db = firebase.database();
+                
+                const linksRef = db.ref('desktop_links');
+                const foldersRef = db.ref('desktop_folders');
+
+                const loadAllItems = () => {
+                    Promise.all([linksRef.once('value'), foldersRef.once('value')]).then(([linksSnap, foldersSnap]) => {
+                        const links = linksSnap.val() || {};
+                        const folders = foldersSnap.val() || {};
+                        
+                        const linkItems = Object.values(links).map(link => ({ ...link, type: 'link' }));
+                        const folderItems = Object.values(folders).map(folder => ({ ...folder, type: 'folder' }));
+                        
+                        allDesktopItems = [...builtInApps, ...linkItems, ...folderItems];
+                        renderAllIcons();
+                        updateStartMenuResults();
+                    });
+                };
+                
+                loadAllItems();
+                linksRef.on('value', loadAllItems);
+                foldersRef.on('value', loadAllItems);
+
+            } catch(e) { 
+                console.error(e);
+                alert("Firebase connection failed."); 
+            }
+            
+            // Event Listeners
+            document.addEventListener('click', (e) => {
+                if (!contextMenu.contains(e.target)) hideContextMenu();
+                if (!startMenu.contains(e.target) && e.target.closest('#start-menu-button') === null) {
+                    startMenu.classList.add('hidden');
+                }
+            });
+            desktop.addEventListener('contextmenu', e => {
+                 if(e.target === desktop) {
+                    showContextMenu(e, null);
+                }
+            });
+            contextMenu.addEventListener('click', (e) => {
+                const button = e.target.closest('button');
+                if (button && !button.disabled) {
+                    const action = button.dataset.action;
+                    if (action === 'newFolder') {
+                        createNewFolder();
+                    } else {
+                        launchApp(contextTarget, action);
+                    }
+                }
+                hideContextMenu();
+            });
+            document.getElementById('start-menu-button').addEventListener('click', (e) => {
+                e.stopPropagation();
+                startMenu.classList.toggle('hidden');
+                if (!startMenu.classList.contains('hidden')) {
+                    startMenuSearch.focus();
+                }
+            });
+            startMenuSearch.addEventListener('input', () => updateStartMenuResults(startMenuSearch.value));
+            startMenuResults.addEventListener('click', (e) => {
+                const li = e.target.closest('li');
+                if (li) {
+                    const itemId = li.dataset.appid;
+                    const itemData = allDesktopItems.find(app => app.id === itemId);
+                    if (itemData) launchApp(itemData);
+                }
+            });
+            
+            document.getElementById('tile-focus').addEventListener('click', () => applyLayout('focus'));
+            document.getElementById('tile-vertical').addEventListener('click', () => applyLayout('vertical-split'));
+            document.getElementById('tile-horizontal').addEventListener('click', () => applyLayout('horizontal-split'));
+            document.getElementById('tile-three-panel').addEventListener('click', () => applyLayout('three-panel'));
+            document.getElementById('tile-quadrant').addEventListener('click', () => applyLayout('quadrant'));
+        });
+    </script>
+
+<script type="module" src="/index.tsx"></script>
+
+
+<script src="./script.js"></script></body></html>
