@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class=""><head><script>window.livecodes = window.livecodes || {};</script><title>Window 10 </title><meta name="title" content="Window 10 "><meta charset="UTF-8">
+<html lang="en" class=""><head><script>window.livecodes = window.livecodes || {};</script><title>Update version window 10 </title><meta name="title" content="Update version window 10 "><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="stylesheet" href="./style.css"><script src="https://cdn.jsdelivr.net/npm/es-module-shims@1.10.0/dist/es-module-shims.js" async=""></script><script type="importmap">{
   "imports": {}
 }</script></head><body>
@@ -625,12 +625,7 @@
                 }
             } else if (appData.type === 'folder') {
                 windowBody.classList.add('folder-body');
-                const itemsInFolder = allDesktopItems.filter(item => item.folderId === appData.id);
-                itemsInFolder.forEach(itemData => {
-                    const iconEl = createIconElement(itemData, true);
-                    windowBody.appendChild(iconEl);
-                });
-
+                rerenderFolderWindow(appData.id, win);
             } else { // It's a link
                 const iframe = document.createElement('iframe');
                 iframe.src = appData.url;
@@ -733,10 +728,7 @@
             if (itemData.type === 'folder') {
                 iconImg.src = 'https://img.icons8.com/fluency/96/folder-invoices.png';
                 iconDiv.classList.add('folder');
-                iconDiv.addEventListener('dragover', (e) => {
-                    e.preventDefault();
-                    iconDiv.classList.add('drag-over');
-                });
+                iconDiv.addEventListener('dragover', (e) => { e.preventDefault(); iconDiv.classList.add('drag-over'); });
                 iconDiv.addEventListener('dragleave', () => iconDiv.classList.remove('drag-over'));
                 iconDiv.addEventListener('drop', (e) => handleDropOnFolder(e, itemData.id));
             } else {
@@ -745,11 +737,15 @@
             }
 
             iconDiv.querySelector('.icon-label').textContent = itemData.name;
-            
             iconDiv.addEventListener('click', (e) => launchApp(itemData));
 
+            // Add context menu for links and folders, and pass whether it's inside a folder
+            if (itemData.type === 'link' || itemData.type === 'folder') {
+                iconDiv.addEventListener('contextmenu', (e) => showContextMenu(e, { ...itemData, isInsideFolder }));
+            }
+
+            // Draggable only if on desktop
             if (!isInsideFolder) {
-                iconDiv.addEventListener('contextmenu', (e) => showContextMenu(e, itemData));
                 iconDiv.addEventListener('dragstart', (e) => handleIconDragStart(e, itemData.id));
             }
             
@@ -772,31 +768,40 @@
 
             let menuHTML = '';
             if (targetData && targetData.id) { // Context is an icon or folder
-                menuHTML += `
-                    <button data-action="popup">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" /></svg>
-                        Open
-                    </button>`;
-                if(targetData.type === 'link') {
+                menuHTML += `<button data-action="popup">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" /></svg>
+                    Open
+                </button>`;
+
+                if (targetData.type === 'link') {
                     menuHTML += `
                         <button data-action="newWindow">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-4.5 4.5V6H18" /></svg>
                             Open in New Tab
-                        </button>
-                    `;
-                    const folders = allDesktopItems.filter(item => item.type === 'folder');
+                        </button>`;
                     menuHTML += `<hr class="context-menu-divider">`;
+
+                    if (targetData.isInsideFolder) {
+                        menuHTML += `
+                            <button data-action="moveToDesktop">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m15 15-6-6m0 0v6m0-6h6" /></svg>
+                                Move to Desktop
+                            </button>`;
+                    } else {
+                        const folders = allDesktopItems.filter(item => item.type === 'folder');
+                        menuHTML += `
+                            <button data-action="moveToFolder" ${folders.length === 0 ? 'disabled title="No folders available"' : ''}>
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" /></svg>
+                                Move to Folder...
+                            </button>`;
+                    }
                     menuHTML += `
-                        <button data-action="moveToFolder" ${folders.length === 0 ? 'disabled title="No folders available"' : ''}>
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" /></svg>
-                            Move to Folder...
-                        </button>
                         <button data-action="deleteLink">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.134-2.033-2.134H8.033c-1.12 0-2.033.954-2.033 2.134v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg>
                             Delete
-                        </button>
-                    `;
+                        </button>`;
                 }
+
             } else { // Context is the desktop
                  menuHTML += `
                     <button data-action="newFolder">
@@ -1365,6 +1370,20 @@
                     console.error(err);
                 });
         }
+        
+        function moveItemToDesktop(itemId) {
+            const item = allDesktopItems.find(i => i.id === itemId);
+            if (!item) return;
+
+            db.ref('desktop_links/' + itemId).update({ folderId: null })
+                .then(() => {
+                    showToast(`Moved '${item.name}' back to the desktop.`);
+                })
+                .catch(err => {
+                    showToast("Error moving item.");
+                    console.error(err);
+                });
+        }
 
         function showMoveToFolderModal(itemToMove) {
             const existingModal = document.getElementById('move-to-folder-modal');
@@ -1429,6 +1448,21 @@
                 });
             });
         }
+        
+        function rerenderFolderWindow(folderId, winInstance = null) {
+            const windowData = winInstance ? { element: winInstance } : openWindows.get(folderId);
+            if (!windowData) return;
+
+            const windowBody = windowData.element.querySelector('.window-body.folder-body');
+            if (!windowBody) return;
+
+            windowBody.innerHTML = ''; // Clear content
+            const itemsInFolder = allDesktopItems.filter(item => item.folderId === folderId);
+            itemsInFolder.forEach(itemData => {
+                const iconEl = createIconElement(itemData, true);
+                windowBody.appendChild(iconEl);
+            });
+        }
 
         // --- Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
@@ -1450,6 +1484,14 @@
                         allDesktopItems = [...builtInApps, ...linkItems, ...folderItems];
                         renderAllIcons();
                         updateStartMenuResults();
+
+                        // Refresh any open folder windows to keep them in sync
+                        openWindows.forEach((winData, winId) => {
+                            const itemData = allDesktopItems.find(item => item.id === winId);
+                            if (itemData && itemData.type === 'folder') {
+                                rerenderFolderWindow(winId, winData.element);
+                            }
+                        });
                     });
                 };
                 
@@ -1482,6 +1524,8 @@
                         createNewFolder();
                     } else if (action === 'moveToFolder') {
                         showMoveToFolderModal(contextTarget);
+                    } else if (action === 'moveToDesktop') {
+                        moveItemToDesktop(contextTarget.id);
                     } else if (action === 'deleteLink') {
                         deleteLink(contextTarget.id);
                     } else {
